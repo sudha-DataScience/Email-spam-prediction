@@ -1,0 +1,525 @@
+---
+title: "spamdata"
+author: "sudha"
+date: "16 October 2017"
+output: pdf_document
+---
+**NOTE** Before starting this assignment please remember to clear your environment, you can do that by running the following code chunk
+```{r}
+rm(list = ls(all=TRUE))
+```
+
+# Agenda 
+
+* Get the data
+
+* Ask an interesting question
+
+* Explore the data
+
+* Data Pre-processing
+
+* Model the data
+
+* Evaluation
+
+
+```{r}
+#Libraries of all the model
+library(knitr)
+library(RColorBrewer)
+library(gridBase)
+library(ElemStatLearn)
+library(foreign)
+library(tree)
+library(rpart)
+library(maptree)
+library(e1071)
+library(ROCR)
+library(randomForest)
+library(inTrees)
+library(caret)
+```
+
+# Reading & Understanding the Data
+```{r}
+#importing data from local disk to R
+spamdata=read.table("C:\\Users/Sony/Documents/sudha internship/spam/spambase.data",header = T,sep=",")
+
+# Use the str() function to get a feel for the dataset.
+```{r}
+str(spamdata)
+```
+# Take a look at the data using the "head()" and "tail()" functions
+```{r}
+
+head(spamdata)
+tail(spamdata)
+```
+
+#Changing the names of column as given by the UCI instructions
+
+```{r}
+newColNames <- c("word_freq_make", "word_freq_address", "word_freq_all", "word_freq_3d", 
+                 "word_freq_our", "word_freq_over", "word_freq_remove", "word_freq_internet", 
+                 "word_freq_order", "word_freq_mail", "word_freq_receive", "word_freq_will", 
+                 "word_freq_people", "word_freq_report", "word_freq_addresses", "word_freq_free", 
+                 "word_freq_business", "word_freq_email", "word_freq_you", "word_freq_credit", 
+                 "word_freq_your", "word_freq_font", "word_freq_000", "word_freq_money", 
+                 "word_freq_hp", "word_freq_hpl", "word_freq_george", "word_freq_650", "word_freq_lab", 
+                 "word_freq_labs", "word_freq_telnet", "word_freq_857", "word_freq_data", 
+                 "word_freq_415", "word_freq_85", "word_freq_technology", "word_freq_1999", 
+                 "word_freq_parts", "word_freq_pm", "word_freq_direct", "word_freq_cs", "word_freq_meeting", 
+                 "word_freq_original", "word_freq_project", "word_freq_re", "word_freq_edu", 
+                 "word_freq_table", "word_freq_conference", "char_freq_ch;", "char_freq_ch(", 
+                 "char_freq_ch[", "char_freq_ch!", "char_freq_ch$", "char_freq_ch#", "capital_run_length_average", 
+                 "capital_run_length_longest", "capital_run_length_total", "spam")
+colnames(spamdata) <- newColNames
+sapply(spamdata[1, ], class)
+```
+
+#as target variable is in integer need to convert to factor as levels of target variable is classified into spam and non spam
+```{r}
+spamdata$spam=as.factor(spamdata$spam)
+
+```
+
+## Missing Values imputation
+
+# Find out the number of missing values in the dataset
+```{r}
+sum(is.na(spamdata))
+
+```
+## Scatter Plots
+
+#A few bi-variate relationships are plotted below, but you are encouraged to explore the dataset in more detail
+
+```{r}
+
+#number of  not spam
+result <- table(spamdata$spam)
+numnotspam <- result[["0"]]
+numnotspam
+
+#number of spam
+numSpam<-result[["1"]]
+numSpam
+summary(spamdata)
+
+#Numbers of not spam vs. Numbers of Spam in DataSet
+CUSTOM_COLORS_PLOT <- colorRampPalette(brewer.pal(10, "Set3"))
+resTable <- table(spamdata$spam)
+par(mfrow = c(1, 2))
+par(mar = c(5, 4, 4, 2) + 0.1)  # increase y-axis margin.
+plot <- plot(spamdata$spam, col = CUSTOM_COLORS_PLOT(2), main = "notspam vs. Spam", 
+             ylim = c(0, 4000), ylab = "Examples Number")
+text(x = plot, y = resTable + 200, labels = resTable)
+percentage <- round(resTable/sum(resTable) * 100)
+labels <- paste(row.names(resTable), percentage)  # add percents to labels
+labels <- paste(labels, "%", sep = "")  # ad % to labels
+pie(resTable, labels = labels, col = CUSTOM_COLORS_PLOT(2), main = "notspam vs. Spam")
+```
+
+```{r}
+
+#Average percentage of words or characters
+
+#Average percentage of words or characters in an email message equal to the indicated word or character. We have chosen the words and characters showing the largest difference between spam and email.
+
+dataset.notspam <- sapply(spamdata[which(spamdata$spam == "0"), 1:54], function(x) ifelse(is.numeric(x), 
+                                                                                          round(mean(x), 2), NA))
+dataset.spam <- sapply(spamdata[which(spamdata$spam == "1"), 1:54], function(x) ifelse(is.numeric(x), 
+                                                                                        round(mean(x), 2), NA))
+
+dataset.notspam.order <- dataset.notspam[order(-dataset.notspam)[1:10]]
+dataset.spam.order <- dataset.spam[order(-dataset.spam)[1:10]]
+```
+
+```{r}
+
+par(mfrow = c(1, 2))
+par(mar = c(8, 4, 4, 2) + 0.1)  # increase y-axis margin.
+plot <- barplot(dataset.notspam.order, col = CUSTOM_COLORS_PLOT(10), main = "notspam: Average Percentage", 
+                names.arg = "", ylab = "Percentage Relative (%)")
+# text(x=plot,y=dataset.email.order-0.1, labels=dataset.email.order,
+# cex=0.6)
+vps <- baseViewports()
+pushViewport(vps$inner, vps$figure, vps$plot)
+grid.text(names(dataset.notspam.order), x = unit(plot, "native"), y = unit(-1, 
+                                                                         "lines"), just = "right", rot = 50)
+popViewport(3)
+
+plot <- barplot(dataset.spam.order, col = CUSTOM_COLORS_PLOT(10), main = "Spam: Average Percentage", 
+                names.arg = "", ylab = "Percentage Relative (%)")
+#text(x=plot,y=dataset.spam.order-0.1, labels=dataset.spam.order,
+# cex=0.6)
+vps <- baseViewports()
+pushViewport(vps$inner, vps$figure, vps$plot)
+grid.text(names(dataset.spam.order), x = unit(plot, "native"), y = unit(-1,"lines"), just =
+            "right", rot = 50)
+popViewport(3)
+```
+#Few columns have special characters so to avoid errors changed it to relevant names
+
+```{r}
+setnames(spamdata, "char_freq_ch;", "colon")
+setnames(spamdata, "char_freq_ch(", "openBraces")
+setnames(spamdata, "char_freq_ch[", "squareBracket")
+setnames(spamdata, "char_freq_ch!", "exclamatory")
+setnames(spamdata, "char_freq_ch$", "dollar")
+setnames(spamdata, "char_freq_ch#", "hash")
+```
+
+
+```{r}
+#TRAINING and TESTING data set for Classification
+trainIndex <- createDataPartition(spamdata$spam, p = .8, list = FALSE, times = 1)
+
+#traindata
+spamdata.train <- spamdata[trainIndex, ]
+
+#test data
+spamdata.test <- spamdata[-trainIndex, ]
+```
+
+
+
+```{r}
+
+# notspam vs. Spam
+resTable <- table(spamdata.train$spam)
+par(mfrow = c(1, 1))
+par(mar = c(5, 4, 4, 2) + 0.1)  # increase y-axis margin.
+plot <- plot(spamdata.train$spam, col = CUSTOM_COLORS_PLOT(6), main = "notspam vs. Spam (Training Data Set)", 
+             ylim = c(0, max(resTable) + 100), ylab = "Examples Number")
+text(x = plot, y = resTable + 50, labels = resTable, cex = 0.75)
+
+#pie chart
+par(mfrow = c(1, 1))
+percentage <- round(resTable/sum(resTable) * 100)
+labels <- paste0(row.names(resTable), " (", percentage, "%) ")  # add percents to labels
+pie(resTable, labels = labels, col = CUSTOM_COLORS_PLOT(10), main = "notspam vs. Spam (Training Data Set)")
+```
+
+```{r}
+# notspam vs. Spam
+resTable <- table(spamdata.test$spam)
+par(mfrow = c(1, 1))
+par(mar = c(5, 4, 4, 2) + 0.1)  # increase y-axis margin.
+plot <- plot(spamdata.test$spam, col = CUSTOM_COLORS_PLOT(6), main = "notspam vs. Spam (Testing Data Set)", 
+             ylim = c(0, max(resTable) + 100), ylab = "Examples Number")
+text(x = plot, y = resTable + 50, labels = resTable, cex = 0.75)
+
+```
+
+# Modelling the Data
+
+## Basic Model
+
+```{r}
+#BUILDING MODEL USING ALL THE VARIABLES
+log_reg1 <- glm(spam~., data = spamdata.train, family = binomial)
+
+#BUILD MODEL USING ONLY IMPORTANT VARAIABLES
+formula=spam~dollar+word_freq_remove+word_freq_000+word_freq_money+capital_run_length_longest+exclamatory+word_freq_credit+word_freq_receive+word_freq_hp+capital_run_length_average+capital_run_length_total+word_freq_free+word_freq_hpl+word_freq_telnet+word_freq_your+word_freq_our+word_freq_order+word_freq_650+word_freq_lab+word_freq_project+word_freq_3d++word_freq_business+word_freq_internet
+
+
+log_reg2 <- glm(formula, data = spamdata.train, family = binomial)
+summary(log_reg)
+```
+
+
+## stepAIC model
+
+* "stepAIC()" is a function in the MASS package
+
+* stepAIC uses AIC (Akaike information criterion) to either drop variables ("backward" direction) or add variables ("forward" direction) from the model
+
+```{r}
+
+#Improve the model using stepAIC
+library(MASS)
+log_reg_step = stepAIC(log_reg1, direction = "both")
+```
+
+## Modifying the Model with the VIF
+
+**Variance Inflation Factor :**
+
+$$VIF_{k} = \dfrac{1}{1 - R_{k}^2}$$
+
+$R_{k}^2$ is the R^2-value obtained by regressing the kth predictor on the remaining predictors. VIF gives us an idea of multi-collinearity
+
+* Every explanatory variable would have a VIF score
+
+* A VIF > 4 means that there are signs of multi-collinearity and anything greater than 10 means that an explanatory variable should be dropped
+
+* We use the "vif()" function from the car package. 
+
+```{r}
+library(car)
+log_reg_step_vif = vif(log_reg_step)
+log_reg_step_vif
+```
+
+# ROC
+
+## Predicted Values are between 0 and 1
+
+* The predict() function on the "glm" object of "binomial" family gives a probability score between 0 and 1, NOT the original levels (0 and 1) of the response variable 
+
+* Hence we must first choose a cutoff point for getting to the original levels of the response variables
+
+* To choose the cutoff point we will use the train data, as test data should not be used to make any decisions regarding the model
+
+## Creating an ROC plot
+
+__Steps to create an ROC plot :__
+
+1) Get a list of predictions (probability scores) using the predict() function
+
+```{r}
+
+# Use the argument 'type = "response"' in the predict function to get a list of predictions between 0 and 1
+
+# By default if no dataset is mentioned, training data is used
+2) Using the ROCR package create a "prediction()" object
+
+```{r}
+
+library(ROCR)
+
+# The prediction object takes the probability scores and the original levels for theses data as input
+prob_train <- predict(log_reg_step, type = "response")
+
+pred <- prediction(prob_train, spamdata$spam)
+```
+
+# The prediction object contains a list of predictions (probability scores), original class labels, cutoffs, false positives, true positives, true negatives, false negatives, No. of positive predictions and No. of negative predictions corresponding to these cutoffs. Class distribution in the dataset.
+
+# Extract performance measures (True Positive Rate and False Positive Rate) using the "performance()" function from the ROCR package
+
+```{r}
+
+# The performance() function from the ROCR package helps us extract metrics such as True positive rate, False positive rate etc. from the prediction object, we created above.
+
+# Two measures (y-axis = tpr, x-axis = fpr) are extracted
+
+perf <- performance(pred, measure="tpr", x.measure="fpr")
+
+
+```
+
+4) Plot the ROC curve using the extracted performance measures (TPR and FPR)
+
+```{r}
+plot(perf)
+
+plot(perf, col=rainbow(10), colorize=T, print.cutoffs.at=seq(0,1,0.05))
+
+```
+
+* Extract the AUC score of the ROC curve and store it in a variable named "auc"
+
+* Use the performance() function on the prediction object created above using the ROCR package, to extract the AUC score
+
+```{r}
+
+perf_auc <- performance(pred_train, measure="auc")
+auc <- perf_auc@y.values[[1]]
+print(auc)
+```
+
+```{r}
+par(mfrow = c(2,2))
+plot(log_reg1)
+
+```
+## Choose a Cutoff Value
+
+* Based on the trade off between TPR and FPR depending on the business domain, a call on the cutoff has to be made.
+```{r}
+preds_train <- ifelse(prob_train > 0.5,"1","0")
+
+```
+
+* A cutoff of 0.1 can be chosen
+## Predictions on test data
+
+* After choosing a cutoff value of 0.1, let's predict the class labels on the test data using our model
+
+```{r}
+prob_test <- predict(log_reg_step, spamdata.test, type = "response")
+preds_test <- ifelse(prob_test > 0.5,"1","0")
+```
+
+# Evaluation Metrics for classification
+
+## Manual Computation
+
+### Confusion Matrix
+
+* Create a confusion matrix using the table() function
+```{r}
+
+confusionMatrix(spamdata.train$spam,preds_train,positive="1")
+confusionMatrix(spamdata.test$spam,preds_test,positive="1")
+
+```
+
+
+
+#DECISION TREE
+# CART Trees
+
+* The classification and regression trees use gini index in place of the gain ratio (based on information gain) used by the ID3 based algorithms, such as c4.5 and c5.0
+
+## Build a Regression Tree
+
+### Model the tree
+
+* We will be using the cart based decision tree algorithm implementation from the rpart package to build our regression tree
+
+ 
+
+#BUILD MODEL USING ALL THE VARIABLES
+```{r}
+model.rpart1 <- rpart(spam ~., method = "class", data = spamdata.train)
+```
+
+#BUILD MODEL USING ONLY IMPORTANT VARIABLES
+```{r}
+model.rpart2 <- rpart(formula, method = "class", data = spamdata.train)
+summary(model.rpart)
+```
+### Tree Explicability
+
+* The variable importance can accessed accessing variable.importance from the reg.tree list
+```{r}
+model.rpart$variable.importance
+```
+
+# The complexity parameter (cp) is used to control the size of the decision tree and to select the optimal tree size. 
+* If the cost of adding another variable to the decision tree from the current node is above the value of cp, then tree building does not continue.
+
+```{r}
+printcp(model.rpart1)
+plot(model.rpart1, uniform = TRUE, main = "Classification (RPART). Classification Tree for SPAM")
+text(model.rpart1, all = TRUE, cex = 0.75)
+draw.tree(model.rpart1, cex = 0.5, nodeinfo = TRUE, col = gray(0:8/8))
+```
+
+
+```{r}
+
+prediction.rpart1 <- predict(model.rpart1, newdata = spamdata.train, type = "class")
+confusionMatrix(prediction.rpart1,spamdata.train$spam,positive = "1")
+```
+
+## Evaluation on Test Data
+
+* We can then proceed to evaluate the regression tree by comparing the predictions to the test data using the regr.eval() function from the DMwR package
+```{r}
+prediction.rpart2 <- predict(model.rpart1, newdata = spamdata.test, type = "class")
+confusionMatrix(prediction.rpart2,spamdata.test$spam,positive = "1")
+```
+
+
+#NAIVEBAEYES
+#P(spam|word)=(P(spam).P(word|spam))/(P(spam).P(word|spam)+P(non-spam).P(word|non-spam))
+#BUILD MODEL USING ALL THE VARIABLES
+```{r}
+spamnaive1 <- naiveBayes(spam~.,data = spamdata.train)
+```
+
+
+
+#BUILD MODEL USING ONLY IMPORTANT VARIABLES
+spamnaive2 <- naiveBayes(formula,data = spamdata.train)
+
+spamnaive1
+```
+
+```{r}
+#Lets test the model
+spamnaive_predict1 <- predict(spamnaive1,spamdata.train)
+spamnaive_predict2 <- predict(spamnaive1,spamdata.test)
+
+
+#confusion matrix
+confusionMatrix(spamnaive_predict1,spamdata.train$spam,positive = "1")
+confusionMatrix(spamnaive_predict2,spamdata.test$spam,positive = "1")
+```
+
+
+#SVM
+
+
+```{r}
+#BUILD MODEL USING ALL THE VARIABLES
+model.svm1 <- svm(spam ~., method = "class", data = spamdata.train,type='C-classification', kernel='linear',gamma=10,cost=10)
+
+#BUILD THE MODEL USING ONLY IMPORTANT VARIABLES
+model.svm2 <- svm(formula, method = "class", data = spamdata.train,type='C-classification', kernel='linear',gamma=10,cost=10)
+
+summary(model.svm1)
+```
+
+
+```{r}
+prediction.svm1 <- predict(model.svm1, newdata = spamdata.train, type = "class")
+confusionMatrix(prediction.svm1,spamdata.train$spam,positive = "1")
+```
+
+#EVALUATION ON TEST MODEL
+
+```{r}
+prediction.svm2 <- predict(model.svm1, newdata = spamdata.test, type = "class")
+confusionMatrix(prediction.svm2,spamdata.test$spam,positive = "1")
+```
+
+
+
+##Random Forest
+
+```{r}
+
+#BUILD MODEL USING ALL THE VARIABLES
+spam.rf1 = randomForest(spam~., data=spamdata.train,ntree=10)
+```
+
+
+
+```{r}
+#BUILD MODEL USING ONLY IMPORTANT VARIABLES
+spam.rf2 = randomForest(formula, data=spamdata.train,ntree=10)
+```
+
+```{r}
+rf.pred1 <- predict(spam.rf1, spamdata.train)
+confusionMatrix(rf.pred1,spamdata.train$spam,positive = "1")
+```
+
+
+```{r}
+#evaluation on Test model
+
+rf.pred2 <- predict(spam.rf1, spamdata.test)
+confusionMatrix(rf.pred2,spamdata.test$spam,positive ="1" )
+```
+
+```{r}
+#Plotting random forest on important variables
+
+library("party")
+x <- ctree(spam ~ ., data=spam)
+plot(x, type="simple")
+varImpPlot(spam.rf1)
+
+```
+
+
+
+
+
